@@ -6,7 +6,8 @@ const UKRAINIAN_WIKI_URL_BASE: &str = "https://resident-evil.fandom.com/uk/wiki/
 const ENGLISH_API_BASE_URL: &str = "https://residentevil.fandom.com/api.php?action=query&prop=revisions&rvprop=content&format=json&rvslots=main";
 const UKRAINIAN_API_BASE_URL: &str = "https://resident-evil.fandom.com/uk/api.php?action=query&prop=revisions&rvprop=content&format=json&rvslots=main";
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut source_link = String::new();
     let mut dest_link = String::new();
     for line in fs::read_to_string("./input.txt").unwrap().lines() {
@@ -27,8 +28,33 @@ fn main() {
         let eng_api_url = format!("{}&titles={}%2Fgallery", ENGLISH_API_BASE_URL, source_title);
         let ukr_api_url = format!("{}&titles={}%2Fгалерея", UKRAINIAN_API_BASE_URL, dest_title);
 
-        println!("eng api url: {}", eng_api_url);
-        println!("ukr api url: {}", ukr_api_url);
+        let res = reqwest::get(&eng_api_url)
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+        let strings =
+            res[res.chars().position(|c| c == '*').unwrap_or(0) + 4..res.len() - 9].split("\\n");
+
+        let mut in_gallery = false;
+
+        let converted_strings = strings.map(|s| {
+            if s.contains("<gallery") {
+                in_gallery = true;
+                return s.to_string();
+            } else if s.contains("</gallery>") {
+                in_gallery = false;
+                return s.to_string();
+            }
+            if !in_gallery {
+                return s.to_string();
+            }
+
+            return format_image_string(s);
+        });
+        converted_strings.for_each(|s| println!("{}", s));
+        // let content = converted_strings.join("\\n");
 
         if dest_link != String::new() {
             source_link = String::new();
@@ -45,4 +71,21 @@ fn extract_article_title(link: &String, base_url: &str) -> String {
         .unwrap_or_else(|| return url.len())]
         .to_string();
     return url;
+}
+
+fn format_image_string(s: &str) -> String {
+    if !s.contains('.') {
+        return s.to_string();
+    }
+
+    if s.contains('|') {
+        let image_part_end = s.chars().position(|c| c == '|').unwrap();
+        let mut image = s[0..image_part_end].to_string();
+        let dot = image.rfind('.').unwrap();
+        image = format!("{}.webp", &image[0..dot]);
+        return format!("{}{}", image, &s[image_part_end..]);
+    }
+
+    let dot = s.rfind('.').unwrap();
+    return format!("{}.webp", &s[..dot]);
 }
