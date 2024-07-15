@@ -1,10 +1,7 @@
 use std::fs;
 
 const ENGLISH_WIKI_URL_BASE: &str = "https://residentevil.fandom.com/wiki/";
-const UKRAINIAN_WIKI_URL_BASE: &str = "https://resident-evil.fandom.com/uk/wiki/";
-
 const ENGLISH_API_BASE_URL: &str = "https://residentevil.fandom.com/api.php?action=query&prop=revisions&rvprop=content&format=json&rvslots=main";
-const UKRAINIAN_API_BASE_URL: &str = "https://resident-evil.fandom.com/uk/api.php?action=query&prop=revisions&rvprop=content&format=json&rvslots=main";
 
 #[tokio::main]
 async fn main() {
@@ -23,10 +20,8 @@ async fn main() {
         }
 
         let source_title = extract_article_title(&source_link, ENGLISH_WIKI_URL_BASE);
-        let dest_title = extract_article_title(&dest_link, UKRAINIAN_WIKI_URL_BASE);
 
         let eng_api_url = format!("{}&titles={}%2Fgallery", ENGLISH_API_BASE_URL, source_title);
-        let ukr_api_url = format!("{}&titles={}%2Fгалерея", UKRAINIAN_API_BASE_URL, dest_title);
 
         let res = reqwest::get(&eng_api_url)
             .await
@@ -39,22 +34,24 @@ async fn main() {
 
         let mut in_gallery = false;
 
-        let converted_strings = strings.map(|s| {
-            if s.contains("<gallery") {
-                in_gallery = true;
-                return s.to_string();
-            } else if s.contains("</gallery>") {
-                in_gallery = false;
-                return s.to_string();
-            }
-            if !in_gallery {
-                return s.to_string();
-            }
+        let converted_strings: Vec<String> = strings
+            .map(|s| {
+                if s.contains("<gallery") {
+                    in_gallery = true;
+                    return s.to_string();
+                } else if s.contains("</gallery>") {
+                    in_gallery = false;
+                    return s.to_string();
+                }
+                if !in_gallery {
+                    return s.to_string();
+                }
 
-            return format_image_string(s);
-        });
-        converted_strings.for_each(|s| println!("{}", s));
-        // let content = converted_strings.join("\\n");
+                return format_image_string(s);
+            })
+            .collect();
+
+        let content = converted_strings.join("\\n");
 
         if dest_link != String::new() {
             source_link = String::new();
